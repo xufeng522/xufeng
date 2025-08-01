@@ -119,14 +119,22 @@
         /* 游戏棋盘样式 - 黑白水墨风格 */
         .game-board {
             display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            grid-template-rows: repeat(9, 1fr);
             gap: 2px;
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
             padding: 10px;
             border-radius: 15px;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
             border: 3px solid #000;
+        }
+
+        .game-board.size-9 {
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+        }
+
+        .game-board.size-8 {
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
         }
 
         .cell {
@@ -222,6 +230,46 @@
         .piece[data-type="crane"] {
             background: linear-gradient(135deg, #5d6d7e 0%, #7f8c8d 100%);
             border-color: #34495e;
+        }
+
+        .piece[data-type="panda"] {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            border-color: #5d6d7e;
+        }
+
+
+
+        .difficulty-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .difficulty-selector label {
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .difficulty-select {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            padding: 4px 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .difficulty-select:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .difficulty-select option {
+            background: #2c3e50;
+            color: white;
         }
 
         /* 游戏结束模态框 */
@@ -365,7 +413,7 @@
     <!-- 音效控制按钮（仅保留消除音效，不再控制） -->
     <button class="sound-control" id="soundControl" style="display:none">🔊</button>
     
-    <div class="game-container">
+    <div class="game-container" id="gameContainer">
         <!-- 得分栏 -->
         <div class="score-panel">
             <div class="score-info">
@@ -389,6 +437,14 @@
                 </div>
             </div>
             
+            <div class="difficulty-selector">
+                <label for="difficultySelect">难度:</label>
+                <select id="difficultySelect" class="difficulty-select">
+                    <option value="normal">正常难度</option>
+                    <option value="medium">中等难度</option>
+                    <option value="hard">困难难度</option>
+                </select>
+            </div>
             <button class="restart-btn" id="restartBtn">重新开始</button>
         </div>
         
@@ -420,8 +476,9 @@
     
     <script>
         class AnimalMatchGame {
-            constructor() {
-                this.boardSize = 9;
+            constructor(difficulty = 'normal') {
+                this.difficulty = difficulty;
+                this.setDifficulty(difficulty);
                 this.board = [];
                 this.currentScore = 0;
                 this.bestScore = localStorage.getItem('bestScore') || 0;
@@ -430,17 +487,36 @@
                 this.gameOver = false;
                 this.soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
                 
-                // 五种动物类型
-                this.animalTypes = ['tiger', 'dragon', 'phoenix', 'turtle', 'crane'];
+                this.init();
+            }
+            
+            setDifficulty(difficulty) {
+                switch(difficulty) {
+                    case 'normal':
+                        this.boardSize = 9;
+                        this.animalTypes = ['tiger', 'dragon', 'phoenix', 'turtle', 'crane'];
+                        break;
+                    case 'medium':
+                        this.boardSize = 8;
+                        this.animalTypes = ['tiger', 'dragon', 'phoenix', 'turtle', 'crane'];
+                        break;
+                    case 'hard':
+                        this.boardSize = 9;
+                        this.animalTypes = ['tiger', 'dragon', 'phoenix', 'turtle', 'crane', 'panda'];
+                        break;
+                    default:
+                        this.boardSize = 9;
+                        this.animalTypes = ['tiger', 'dragon', 'phoenix', 'turtle', 'crane'];
+                }
+                
                 this.animalSymbols = {
                     'tiger': '🐯',
                     'dragon': '🐉',
                     'phoenix': '🦅',
                     'turtle': '🐢',
-                    'crane': '🦢'
+                    'crane': '🦢',
+                    'panda': '🐼'
                 };
-                
-                this.init();
             }
             
             init() {
@@ -455,6 +531,9 @@
             createBoard() {
                 const gameBoard = document.getElementById('gameBoard');
                 gameBoard.innerHTML = '';
+                
+                // 设置棋盘大小类名
+                gameBoard.className = `game-board size-${this.boardSize}`;
                 
                 for (let row = 0; row < this.boardSize; row++) {
                     this.board[row] = [];
@@ -588,11 +667,12 @@
             
             bindEvents() {
                 const gameBoard = document.getElementById('gameBoard');
-                const restartBtn = document.getElementById('restartBtn');
-                const modalRestartBtn = document.getElementById('modalRestartBtn');
-                const soundControl = document.getElementById('soundControl');
                 
-                gameBoard.addEventListener('click', (e) => {
+                // 清除之前的事件监听器
+                const newGameBoard = gameBoard.cloneNode(true);
+                gameBoard.parentNode.replaceChild(newGameBoard, gameBoard);
+                
+                newGameBoard.addEventListener('click', (e) => {
                     if (this.gameOver) return;
                     
                     const cell = e.target.closest('.cell');
@@ -602,15 +682,6 @@
                     const col = parseInt(cell.dataset.col);
                     
                     this.handleCellClick(row, col);
-                });
-                
-                restartBtn.addEventListener('click', () => this.restartGame());
-                modalRestartBtn.addEventListener('click', () => this.restartGame());
-                
-                soundControl.addEventListener('click', () => {
-                    this.soundEnabled = !this.soundEnabled;
-                    localStorage.setItem('soundEnabled', this.soundEnabled);
-                    this.updateSoundControl();
                 });
             }
             
@@ -1079,17 +1150,29 @@
         }
 
         // 启动游戏
-        // 移除自我测试按钮和相关调用
-        // 添加背景音乐喇叭控制
+        let game = null;
+        let bgmPlaying = false;
+
+        function updateBgmIcon() {
+            const bgmControl = document.getElementById('bgmControl');
+            if (bgmControl) bgmControl.textContent = bgmPlaying ? '🔊' : '🔈';
+        }
+
+        function changeDifficulty() {
+            const difficultySelect = document.getElementById('difficultySelect');
+            const difficulty = difficultySelect.value;
+            
+            if (game) {
+                // 重新创建游戏实例
+                game = new AnimalMatchGame(difficulty);
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const game = new AnimalMatchGame();
             const bgm = document.getElementById('bgm');
             const bgmControl = document.getElementById('bgmControl');
-            let bgmPlaying = false;
-            function updateBgmIcon() {
-                if (bgmControl) bgmControl.textContent = bgmPlaying ? '🔊' : '🔈';
-            }
+            
+            // 背景音乐控制
             if (bgmControl) {
                 bgmControl.onclick = () => {
                     if (bgm.paused) {
@@ -1102,6 +1185,7 @@
                     updateBgmIcon();
                 };
             }
+            
             // 页面加载时尝试自动播放
             bgm.play().then(() => {
                 bgmPlaying = true;
@@ -1115,6 +1199,26 @@
                 }, { once: true });
             });
             updateBgmIcon();
+            
+            // 难度选择下拉框事件
+            document.getElementById('difficultySelect').addEventListener('change', changeDifficulty);
+            
+            // 重新开始按钮事件
+            document.getElementById('restartBtn').addEventListener('click', () => {
+                if (game) {
+                    game.restartGame();
+                }
+            });
+            
+            // 模态框重新开始按钮事件
+            document.getElementById('modalRestartBtn').addEventListener('click', () => {
+                if (game) {
+                    game.restartGame();
+                }
+            });
+            
+            // 初始化游戏
+            game = new AnimalMatchGame('normal');
         }); 
     </script>
 </body>
