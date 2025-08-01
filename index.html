@@ -272,6 +272,72 @@
             color: white;
         }
 
+        /* 礼花效果 */
+        .firework {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            animation: firework 2s ease-out forwards;
+        }
+
+        @keyframes firework {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+                background: #ff6b6b;
+            }
+            50% {
+                transform: scale(1);
+                opacity: 1;
+                background: #4ecdc4;
+            }
+            100% {
+                transform: scale(0);
+                opacity: 0;
+                background: #45b7d1;
+            }
+        }
+
+        /* 等级显示样式 */
+        .level-display {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        .level-badge {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 控制行样式 */
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .control-row .level-display {
+            margin: 0;
+        }
+
+        .control-row .difficulty-selector {
+            margin: 0;
+        }
+
+        .control-row .restart-btn {
+            margin: 0;
+        }
+
         /* 游戏结束模态框 */
         .game-over-modal {
             display: none;
@@ -418,7 +484,7 @@
         <div class="score-panel">
             <div class="score-info">
                 <div class="current-score">
-                    <span class="label">当前得分:</span>
+                    <span class="label">得分:</span>
                     <span class="value" id="currentScore">0</span>
                 </div>
                 <div class="best-score">
@@ -437,15 +503,21 @@
                 </div>
             </div>
             
-            <div class="difficulty-selector">
-                <label for="difficultySelect">难度:</label>
-                <select id="difficultySelect" class="difficulty-select">
-                    <option value="normal">正常难度</option>
-                    <option value="medium">中等难度</option>
-                    <option value="hard">困难难度</option>
-                </select>
+            <div class="control-row">
+                <div class="level-display">
+                    <span class="label">等级:</span>
+                    <span class="level-badge" id="levelDisplay">青铜</span>
+                </div>
+                <div class="difficulty-selector">
+                    <label for="difficultySelect">难度:</label>
+                    <select id="difficultySelect" class="difficulty-select">
+                        <option value="normal">正常</option>
+                        <option value="medium">中等</option>
+                        <option value="hard">困难</option>
+                    </select>
+                </div>
+                <button class="restart-btn" id="restartBtn">重新开始</button>
             </div>
-            <button class="restart-btn" id="restartBtn">重新开始</button>
         </div>
         
         <!-- 游戏棋盘 -->
@@ -487,7 +559,68 @@
                 this.gameOver = false;
                 this.soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
                 
+                // 等级系统
+                this.playerLevel = this.getPlayerLevel();
+                this.currentLevel = this.calculateLevel(this.currentScore);
+                
+                // 加载游戏状态
+                this.loadGameState();
+                
                 this.init();
+            }
+            
+            // 计算玩家等级
+            calculateLevel(score) {
+                if (score <= 3000) return '青铜';
+                if (score <= 5000) return '黄金';
+                if (score <= 7000) return '铂金';
+                if (score <= 12000) return '钻石';
+                if (score <= 16000) return '星耀';
+                return '王者';
+            }
+            
+            // 获取玩家最高等级
+            getPlayerLevel() {
+                const savedLevel = localStorage.getItem('playerLevel') || '青铜';
+                return savedLevel;
+            }
+            
+            // 保存游戏状态
+            saveGameState() {
+                const gameState = {
+                    board: this.board,
+                    currentScore: this.currentScore,
+                    nextPieces: this.nextPieces,
+                    difficulty: this.difficulty,
+                    gameOver: this.gameOver
+                };
+                localStorage.setItem('gameState', JSON.stringify(gameState));
+            }
+            
+            // 加载游戏状态
+            loadGameState() {
+                const savedState = localStorage.getItem('gameState');
+                if (savedState) {
+                    try {
+                        const state = JSON.parse(savedState);
+                        // 只有当难度相同时才加载状态
+                        if (state.difficulty === this.difficulty && !state.gameOver) {
+                            this.board = state.board;
+                            this.currentScore = state.currentScore;
+                            this.nextPieces = state.nextPieces;
+                            this.gameOver = state.gameOver;
+                            return true;
+                        }
+                    } catch (e) {
+                        console.log('加载游戏状态失败:', e);
+                    }
+                }
+                return false;
+            }
+            
+            // 清除游戏状态
+            clearGameState() {
+                localStorage.removeItem('gameState');
             }
             
             setDifficulty(difficulty) {
@@ -522,10 +655,40 @@
             init() {
                 this.createBoard();
                 this.updateScoreDisplay();
-                this.generateNextPieces();
-                this.placeInitialPieces();
+                
+                // 检查是否有保存的游戏状态
+                const hasSavedState = this.loadGameState();
+                
+                if (hasSavedState) {
+                    // 恢复棋盘状态
+                    this.restoreBoard();
+                    this.updateNextPiecesDisplay();
+                } else {
+                    // 开始新游戏
+                    this.generateNextPieces();
+                    this.placeInitialPieces();
+                }
+                
                 this.bindEvents();
                 this.updateSoundControl();
+            }
+            
+            // 恢复棋盘状态
+            restoreBoard() {
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        if (this.board[row][col] !== null) {
+                            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                            if (cell) {
+                                const piece = document.createElement('div');
+                                piece.className = 'piece';
+                                piece.dataset.type = this.board[row][col];
+                                piece.textContent = this.animalSymbols[this.board[row][col]];
+                                cell.appendChild(piece);
+                            }
+                        }
+                    }
+                }
             }
             
             createBoard() {
@@ -883,6 +1046,8 @@
                     // 没有消除时投放3个新棋子
                     await this.placeThreePieces();
                 }
+                // 保存游戏状态
+                this.saveGameState();
                 // 检查游戏是否结束
                 if (this.isGameOver()) {
                     this.endGame();
@@ -997,6 +1162,9 @@
                         }, 500);
                     }
                 });
+                
+                // 保存游戏状态
+                this.saveGameState();
             }
             
             isGameOver() {
@@ -1029,6 +1197,9 @@
                     this.updateScoreDisplay();
                 }
                 
+                // 清除游戏状态
+                this.clearGameState();
+                
                 // 显示游戏结束模态框
                 const modal = document.getElementById('gameOverModal');
                 const finalScore = document.getElementById('finalScore');
@@ -1039,6 +1210,75 @@
             updateScoreDisplay() {
                 document.getElementById('currentScore').textContent = this.currentScore;
                 document.getElementById('bestScore').textContent = this.bestScore;
+                
+                // 更新等级显示
+                const newLevel = this.calculateLevel(this.currentScore);
+                if (newLevel !== this.currentLevel) {
+                    this.currentLevel = newLevel;
+                    this.checkLevelUp();
+                }
+                
+                // 显示当前等级
+                this.updateLevelDisplay();
+            }
+            
+            // 检查等级提升
+            checkLevelUp() {
+                const levelOrder = ['青铜', '黄金', '铂金', '钻石', '星耀', '王者'];
+                const currentIndex = levelOrder.indexOf(this.currentLevel);
+                const playerIndex = levelOrder.indexOf(this.playerLevel);
+                
+                if (currentIndex > playerIndex) {
+                    // 等级提升
+                    this.playerLevel = this.currentLevel;
+                    localStorage.setItem('playerLevel', this.playerLevel);
+                    this.showLevelUpEffect();
+                }
+            }
+            
+            // 显示等级提升效果
+            showLevelUpEffect() {
+                // 创建礼花效果
+                this.createFireworks();
+                
+                // 显示等级提升提示
+                setTimeout(() => {
+                    alert(`🎉 恭喜您升级到 ${this.playerLevel} 等级！`);
+                }, 1000);
+            }
+            
+            // 创建礼花效果
+            createFireworks() {
+                const container = document.querySelector('.game-container');
+                for (let i = 0; i < 20; i++) {
+                    setTimeout(() => {
+                        this.createFirework(container);
+                    }, i * 100);
+                }
+            }
+            
+            // 创建单个礼花
+            createFirework(container) {
+                const firework = document.createElement('div');
+                firework.className = 'firework';
+                firework.style.left = Math.random() * 100 + '%';
+                firework.style.top = Math.random() * 100 + '%';
+                firework.style.animationDelay = Math.random() * 0.5 + 's';
+                container.appendChild(firework);
+                
+                setTimeout(() => {
+                    if (firework.parentNode) {
+                        firework.parentNode.removeChild(firework);
+                    }
+                }, 2000);
+            }
+            
+            // 更新等级显示
+            updateLevelDisplay() {
+                const levelDisplay = document.getElementById('levelDisplay');
+                if (levelDisplay) {
+                    levelDisplay.textContent = this.currentLevel;
+                }
             }
             
             restartGame() {
@@ -1048,6 +1288,9 @@
                 this.selectedCell = null;
                 this.validMoves = null;
                 this.gameOver = false;
+                
+                // 清除游戏状态
+                this.clearGameState();
                 
                 // 隐藏模态框
                 document.getElementById('gameOverModal').style.display = 'none';
